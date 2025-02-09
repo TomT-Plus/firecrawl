@@ -1,19 +1,22 @@
-name: firecrawl
+version: "3.9"
 
 x-common-service: &common-service
-  build: apps/api
+  build:
+    context: apps/api
   ulimits:
     nofile:
       soft: 65535
       hard: 65535
   networks:
-    - backend
+    # - backend
+    - firecawl_backend
   extra_hosts:
     - "host.docker.internal:host-gateway"
 
 services:
   playwright-service:
-    build: apps/playwright-service
+    build:
+      context: apps/playwright-service
     environment:
       - PORT=3000
       - PROXY_SERVER=${PROXY_SERVER}
@@ -21,13 +24,18 @@ services:
       - PROXY_PASSWORD=${PROXY_PASSWORD}
       - BLOCK_MEDIA=${BLOCK_MEDIA}
     networks:
-      - backend
+      # - backend
+      - firecawl_backend
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   api:
     <<: *common-service
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      REDIS_RATE_LIMIT_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_RATE_LIMIT_URL: ${REDIS_RATE_LIMIT_URL:-redis://redis:6379}
       PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000}
       USE_DB_AUTHENTICATION: ${USE_DB_AUTHENTICATION}
       PORT: ${PORT:-3002}
@@ -56,12 +64,16 @@ services:
     ports:
       - "3002:3002"
     command: [ "pnpm", "run", "start:production" ]
+    deploy:
+      resources:
+        limits:
+          memory: 2g
 
   worker:
     <<: *common-service
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      REDIS_RATE_LIMIT_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_RATE_LIMIT_URL: ${REDIS_RATE_LIMIT_URL:-redis://redis:6379}
       PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000}
       USE_DB_AUTHENTICATION: ${USE_DB_AUTHENTICATION}
       PORT: ${PORT:-3002}
@@ -84,18 +96,26 @@ services:
       SELF_HOSTED_WEBHOOK_URL: ${SELF_HOSTED_WEBHOOK_URL}
       LOGGING_LEVEL: ${LOGGING_LEVEL}
       FLY_PROCESS_GROUP: worker
+      MAX_CPU: 1
+      MAX_RAM: 1
     depends_on:
       - redis
       - playwright-service
       - api
     command: [ "pnpm", "run", "workers" ]
+    deploy:
+      resources:
+        limits:
+          memory: 2g
 
   redis:
     image: redis:alpine
     networks:
-      - backend
+      # - backend
+      - firecawl_backend
     command: redis-server --bind 0.0.0.0
 
 networks:
-  backend:
+  # backend:
+  firecawl_backend:
     driver: bridge
